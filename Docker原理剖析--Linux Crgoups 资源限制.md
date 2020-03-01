@@ -1,10 +1,26 @@
+<!-- TOC -->
 
+    - [什么是`Lunux Cgroups`](#01-什么是`LunuxCgroups`)
+        - [`Cgroups`中的四个组件](#011-`Cgroups`中的四个组件)
+        - [四个组件的相互关系](#012-四个组件的相互关系)
+        - [`Kernel`接口](#013-`Kernel`接口)
+        - [用`Go`实现通过`cgroup`限制容器资源](#014-用`Go`实现通过`cgroup`限制容器资源)
+            - [技术总结](#0141-技术总结)
+            - [参考:](#0142-参考:)
 
-## 什么是`Lunux Cgroups`
+<!-- /TOC -->
+
+---------------------------------
+
+<a id="toc_anchor" name="#01-什么是`LunuxCgroups`"></a>
+
+## 0.1. 什么是`Lunux Cgroups`
 
 `Lunux Cgroups` 提供了对一组进程及子进程的资源限制.控制和统计的能力,这些资源包括硬件资源`CPU`,`Memory`,`DIsk`,`Network`等等
 
-### `Cgroups`中的四个组件
+<a id="toc_anchor" name="#011-`Cgroups`中的四个组件"></a>
+
+### 0.1.1. `Cgroups`中的四个组件
 
 * `Cgroup`((控制组) 是对进程分组管理的一种机制,一个`Cgroup`包含一组进程,并可以在上面添加添加`Linux Subsystem`的各种参数配置,将一组进程和一组`Subsystem`的系统参数关联起来
 
@@ -31,7 +47,9 @@
 * `Task` (任务) 在`cgroups`中,任务就是系统的一个进程
 
 
-### 四个组件的相互关系
+<a id="toc_anchor" name="#012-四个组件的相互关系"></a>
+
+### 0.1.2. 四个组件的相互关系
 
 1. 系统在创建新的`hierarchy`之后,该系统的所有任务都会加入这个`hierarchy`的`cgroup`---称之为`root cgroup`,此`cgroup`在创建`hierarchy`自动创建,后面在该`hierarchy`中创建都是`cgroup`根节点的子节点
 
@@ -43,8 +61,7 @@
 
 5. 一个进程`fork`出子进程时,该子进程默认自动成为父进程所在的`cgroup`的成员,也可以根据情况将其移动到到不同的`cgroup`中.
 
-
-![avatar][hierarchy]
+![](./res/mdImg/CGroups.png)
 
 图 1. CGroup 层级图 (来源:https://www.ibm.com/developerworks/cn/linux/1506_cgroup/index.html)
 
@@ -52,7 +69,9 @@
 
 ---------------------------------
 
-### `Kernel`接口
+<a id="toc_anchor" name="#013-`Kernel`接口"></a>
+
+### 0.1.3. `Kernel`接口
 
 `Cgroups`中的`hierarchy`是一种树状组织结构,`Kernel`为了使对`Cgroups`的配置更加直观,是通过一个虚拟文件系统来配置`Cgroups`的,通过层级虚拟出`cgroup`树,例子操作如下
 
@@ -219,7 +238,9 @@ VmSwap:   105200 kB     # 进程所使用的交换区大小
 
 ----------------------------------
 
-### 用`Go`实现通过`cgroup`限制容器资源
+<a id="toc_anchor" name="#014-用`Go`实现通过`cgroup`限制容器资源"></a>
+
+### 0.1.4. 用`Go`实现通过`cgroup`限制容器资源
 
 下面在`Namespace`的基础上,加上`cgroup`限制实现一个`demo`,使其能够具有限制容器内存的功能
 
@@ -384,7 +405,9 @@ VmSwap:   117936 kB
 
 ----------------------------------
 
-#### 技术总结
+<a id="toc_anchor" name="#0141-技术总结"></a>
+
+#### 0.1.4.1. 技术总结
 1. 在挂载了`memory subsystem`的`Hierarchy`上创建`cgroup`
 2. 限制该`cgroup`的最大物理内存值
 3. 将`fork`出来的进程加入到这个容器内
@@ -395,11 +418,11 @@ VmSwap:   117936 kB
 
 
 ----------------------------------
-#### 参考:
+<a id="toc_anchor" name="#0142-参考:"></a>
+
+#### 0.1.4.2. 参考:
 
 * https://www.ibm.com/developerworks/cn/linux/1506_cgroup/index.html
-
-
 
 
 
