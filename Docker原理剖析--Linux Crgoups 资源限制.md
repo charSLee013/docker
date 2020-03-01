@@ -1,8 +1,10 @@
+
+
 ## 什么是`Lunux Cgroups`
 
 `Lunux Cgroups` 提供了对一组进程及子进程的资源限制.控制和统计的能力,这些资源包括硬件资源`CPU`,`Memory`,`DIsk`,`Network`等等
 
-#### `Cgroups`中的四个组件
+### `Cgroups`中的四个组件
 
 * `Cgroup`((控制组) 是对进程分组管理的一种机制,一个`Cgroup`包含一组进程,并可以在上面添加添加`Linux Subsystem`的各种参数配置,将一组进程和一组`Subsystem`的系统参数关联起来
 
@@ -21,7 +23,7 @@
     * `ns` 可以使不同`cgroups`下面的进程使用不同的`namespace`.
     每个`subsystem`会关联到定义的`cgroup`上,并对这个`cgoup`中的进程做相应的限制和控制.
 
-* `hierarchy树形结构的 CGroup 层级，每个子 CGroup 节点会继承父 CGroup 节点的子系统配置，每个 Hierarchy 在初始化时会有默认的 CGroup(Root CGroup)
+* `hierarchy`树形结构的 `CGroup` 层级，每个子 `CGroup` 节点会继承父 `CGroup` 节点的子系统配置，每个 `Hierarchy` 在初始化时会有默认的 `CGroup`(`Root CGroup`)
 
 
 比如一组`task`进程通过`cgroup1`限制了`CPU`使用率,然后其中一个日志进程还需要限制磁盘IO,为了避免限制磁盘IO影响到其他进程,就可以创建`cgroup2`,使其继承`cgroup1`并限制磁盘IO,这样这样`cgroup2`便继承了`cgroup1`中对CPU使用率的限制并且添加了磁盘IO的限制而不影响到`cgroup1`中的其他进程
@@ -29,7 +31,7 @@
 * `Task` (任务) 在`cgroups`中,任务就是系统的一个进程
 
 
-#### 四个组件的相互关系
+### 四个组件的相互关系
 
 1. 系统在创建新的`hierarchy`之后,该系统的所有任务都会加入这个`hierarchy`的`cgroup`---称之为`root cgroup`,此`cgroup`在创建`hierarchy`自动创建,后面在该`hierarchy`中创建都是`cgroup`根节点的子节点
 
@@ -50,11 +52,11 @@
 
 ---------------------------------
 
-#### `Kernel`接口
+### `Kernel`接口
 
 `Cgroups`中的`hierarchy`是一种树状组织结构,`Kernel`为了使对`Cgroups`的配置更加直观,是通过一个虚拟文件系统来配置`Cgroups`的,通过层级虚拟出`cgroup`树,例子操作如下
 
-1. 创建并挂载一个`hierarchy`(cgroup)树
+1. 创建并挂载一个`hierarchy`(`cgroup`)树
 
 ```Bash
 # 创建一个`hierarchy`
@@ -86,8 +88,7 @@ cgroup.clone_children  cgroup.procs  cgroup.sane_behavior  notify_on_release  re
 ```Bash
 ## 进入到刚刚创建的 hierarchy 内
 root@DESKTOP-UMENNVI:~# cd cgroup-test/
-root@DESKTOP-UMENNVI:~/cgroup-test# mkdir cgroup-1
-root@DESKTOP-UMENNVI:~/cgroup-test# mkdir cgroup-2
+root@DESKTOP-UMENNVI:~/cgroup-test# mkdir  -p cgroup-1 cgroup-2
 
 ## 查看目录树
 root@DESKTOP-UMENNVI:~/cgroup-test# tree
@@ -156,11 +157,240 @@ root@DESKTOP-UMENNVI:~/cgroup-test/cgroup-1#
 在上面创建`hierarchy`的时候,这个`hierarchy`并没有关联到任何的`subsystem`,因此我们需要手动创建`subsystem`挂载到这个`cgroup-1`中
 
 ```Bash
-## 创建并挂载 memory subsystem 到 cgroup-test/cgroup-1/memory
+## 挂载 memory subsystem 到 cgroup-test/cgroup-1/memory
+root@DESKTOP-UMENNVI:~/cgroup-test/cgroup-1# mkdir -p memory
 
+root@DESKTOP-UMENNVI:~/cgroup-test/cgroup-1# mount -t cgroup -o memory cgoup-1-mem ./memory
 
+## 创建限制内存的 cgroup (limit-mem 可以替换成任意字符串)
+root@DESKTOP-UMENNVI:~/cgroup-test/cgroup-1#  mkdir -p memory/limit-mem
+
+## 将当前进程移动到这个 cgroup 中
+root@DESKTOP-UMENNVI:~/cgroup-test/cgroup-1# echo $$ > memory/limit-mem/tasks
+
+## 运行 stress 进程占用 200M 内存
+root@DESKTOP-UMENNVI:~/cgroup-test/cgroup-1# stress --vm-bytes 200m --vm-keep -m 1
+stress: info: [308] dispatching hogs: 0 cpu, 0 io, 1 vm, 0 hdd
+
+## 结束进程
+Ctrl+c / Command + c
+```
+
+开始限制 `cgroup` 内进程的内存使用量
+
+```Bash
+## 设置最大 cgroup 的最大内存占用为100MB
+root@DESKTOP-UMENNVI:~/cgroup-test/cgroup-1# sudo echo 100M > memory/limit-mem/memory.limit_in_bytes
+
+## 运行 stress 进程占用 200M 内存
+stress --vm-bytes 200m --vm-keep -m 1
 
 ```
+
+另起终端,查看`stress`进程占用内存情况
+
+```Bash
+## 此时查看进程ID号
+root@DESKTOP-UMENNVI:~/cgroup-test/cgroup-1# ps -ef | grep stress | grep -v grep
+root       496   258  0 11:14 pts/0    00:00:00 stress --vm-bytes 200m --vm-keep -m 1
+root       497   496 23 11:14 pts/0    00:00:14 stress --vm-bytes 200m --vm-keep -m 1
+
+## 可以看到有两个 stress 进程,其中有一个是 497 的子进程,我们需要查看的进程PID就是那个子进程
+
+## 查看进程占用情况
+root@DESKTOP-UMENNVI:~/cgroup-test/cgroup-1# cat /proc/497/status  | grep Vm
+VmPeak:   213044 kB     # 进程所使用虚拟内存的峰值
+VmSize:   213044 kB     # 进程当前使用的虚拟内存大小
+VmLck:         0 kB     # 已经锁住的物理内存的大小
+VmPin:         0 kB     # 进程所使用的物理内存峰值
+VmHWM:    100292 kB     # 进程当前使用的物理内存的峰值
+VmRSS:     99956 kB     # 进程当前使用的物理内存大小
+VmData:   204996 kB     # 进程占用的数据段大小
+VmStk:       132 kB     # 进程占用的栈大小
+VmExe:        20 kB     # 进程占用的代码段大小(不包含链接库)
+VmLib:      3764 kB     # 进程所加载的动态库所占用的内存大小(可能与其他进程共享)
+VmPTE:       452 kB     # 进程占用的页表大小 (交换表项数量)
+VmSwap:   105200 kB     # 进程所使用的交换区大小
+
+```
+
+可以看到`stress`进程实际物理内存占用只有 `99956kB` ,其余占用内存分配给了`swap`分区了,说明已经成功将进程最大(物理内存)占用限制到了 `100M`
+
+
+----------------------------------
+
+### 用`Go`实现通过`cgroup`限制容器资源
+
+下面在`Namespace`的基础上,加上`cgroup`限制实现一个`demo`,使其能够具有限制容器内存的功能
+
+```Go
+// Cgroup/limitMem/demo.go
+package main
+
+import (
+	"fmt"
+	"io/ioutil"
+	"log"
+	"os"
+	"os/exec"
+	"path"
+	"strconv"
+	"syscall"
+)
+
+const cgroupMemoryHierarchyMount = "/sys/fs/cgroup/memory"
+const limitMemory = "100M"
+
+func main() {
+	//-----------------------------------------------------
+	// 5.运行 stress 进程测试内存占用
+	if os.Args[0] == "/proc/self/exe" {
+		//-----------------------------------------------------
+		// 6. 挂载容器内的 /proc 的文件系统
+		//Mount /proc to new root's  proc directory using MNT namespace
+		if err := syscall.Mount("proc", "/proc", "proc", uintptr(syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV), ""); err != nil {
+			fmt.Println("Proc mount failed,Error : ", err)
+		}
+
+		// 7. 异步执行一个 sh 进程进入到容器内
+		go func() {
+			cmd := exec.Command("/bin/sh")
+
+			cmd.SysProcAttr = &syscall.SysProcAttr{}
+
+			cmd.Stdin = os.Stdin
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			cmd.Run()
+			os.Exit(1)
+		}()
+
+		// 8. 运行 stress 进程
+		log.Printf("Current pid %d \n", syscall.SYS_GETPID)
+		cmd := exec.Command("sh", "-c", `stress --vm-bytes 200m --vm-keep -m 1`)
+		cmd.SysProcAttr = &syscall.SysProcAttr{}
+
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+
+		log.Print("Close the program, press input `exit` \n")
+		if err := cmd.Run(); err != nil {
+			log.Fatal(err)
+		} else {
+			log.Printf("Stress process pid : %d \n", cmd.Process.Pid)
+		}
+		os.Exit(1)
+
+	}
+
+	//-----------------------------------------------------
+	// 1, 先创建一个外部进程
+	cmd := exec.Command("/proc/self/exe")
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID | syscall.CLONE_NEWNS,
+	}
+
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Start(); err != nil {
+		log.Fatal(err)
+		os.Exit(1)
+	}
+
+	//-----------------------------------------------------
+	// 2. 在挂载了memory subsysyem 下创建限制内存的cgroup
+	memory_limit_path := path.Join(cgroupMemoryHierarchyMount, "memorylimit")
+	if f, err := os.Stat(memory_limit_path); err == nil {
+		if !f.IsDir() {
+			if err = os.Mkdir(memory_limit_path, 0755); err != nil {
+				log.Fatal(err)
+			} else {
+				log.Printf("Mkdir memory cgroup %s \n", path.Join(cgroupMemoryHierarchyMount, "memorylimit"))
+			}
+		}
+	} else {
+		if err = os.Mkdir(memory_limit_path, 0755); err != nil {
+			log.Fatal(err)
+		} else {
+			log.Printf("Mkdir memory cgroup %s \n", path.Join(cgroupMemoryHierarchyMount, "memorylimit"))
+		}
+	}
+
+	//-----------------------------------------------------
+	// 3. 限制 cgroup 内进程最大物理内存<limitMemory>
+	if err := ioutil.WriteFile(path.Join(memory_limit_path, "memory.limit_in_bytes"), []byte(limitMemory), 0644); err != nil {
+		log.Fatal("Litmit memory error,", err)
+	} else {
+		log.Printf("Litmit memory %v sucessed\n", limitMemory)
+	}
+
+	log.Printf("Self process pid : %d \n", cmd.Process.Pid)
+
+	//-----------------------------------------------------
+	// 4. 将进程加入到 cgroup 中
+	if err := ioutil.WriteFile(path.Join(memory_limit_path, "tasks"), []byte(strconv.Itoa(cmd.Process.Pid)), 0644); err != nil {
+		log.Fatal("Move process to task error,", err)
+	} else {
+		log.Printf("Move process %d to task sucessed \n", cmd.Process.Pid)
+	}
+
+	cmd.Process.Wait()
+}
+
+```
+
+运行程序
+
+```Bash
+root@DESKTOP-UMENNVI:# go run Cgroup/limitMem/demo.go 
+2020/03/01 23:05:33 Litmit memory 100M sucessed
+2020/03/01 23:05:33 Self process pid : 22761 
+2020/03/01 23:05:33 Move process 22761 to task sucessed 
+2020/03/01 23:05:33 Current pid 39 
+2020/03/01 23:05:33 Close the program, press input `exit` 
+# stress: info: [8] dispatching hogs: 0 cpu, 0 io, 1 vm, 0 hdd
+# 此时再按一下回车
+
+# ps -ef      
+UID        PID  PPID  C STIME TTY          TIME CMD
+root         1     0  0 23:05 pts/1    00:00:00 /proc/self/exe
+root         6     1  0 23:05 pts/1    00:00:00 /bin/sh
+root         7     1  0 23:05 pts/1    00:00:00 sh -c stress --vm-bytes 200m --vm-keep -m 1
+root         8     7  0 23:05 pts/1    00:00:00 stress --vm-bytes 200m --vm-keep -m 1
+root         9     8 36 23:05 pts/1    00:00:07 stress --vm-bytes 200m --vm-keep -m 1
+root        10     6  0 23:05 pts/1    00:00:00 ps -ef
+
+## 可以看到PID Namespace已经被隔离了,这里我们直接查看 stree 进程的内存占用
+# cat /proc/9/status | grep Vm
+VmPeak:   213044 kB
+VmSize:   213044 kB
+VmLck:         0 kB
+VmPin:         0 kB
+VmHWM:     98440 kB
+VmRSS:     87220 kB
+VmData:   204996 kB
+VmStk:       132 kB
+VmExe:        20 kB
+VmLib:      3764 kB
+VmPTE:       460 kB
+VmSwap:   117936 kB
+
+```
+
+通过对`Cgroup`的配置,已经将容器中的`stress`进程的物理内存占用限制到了`100MB`
+
+----------------------------------
+
+#### 技术总结
+1. 在挂载了`memory subsystem`的`Hierarchy`上创建`cgroup`
+2. 限制该`cgroup`的最大物理内存值
+3. 将`fork`出来的进程加入到这个容器内
+4. 在容器内重新挂载`/proc`使其跟宿主机隔离`PID Namespace`
+5. 在容器内运行`stress`进程
+6. 另起一个进程开`sh`进程进入到容器内
 
 
 
